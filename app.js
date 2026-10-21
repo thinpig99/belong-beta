@@ -119,6 +119,15 @@
     }
   };
 
+  const LINE_MATCHING = "Perfect. One moment please. I'm finding exactly the right space and soul for you in London...";
+  const LINE_ALT = "Of course. Here's another gathering I think would suit you just as well.";
+  const LINE_DONE = "I'll be here whenever you need me. Enjoy your first gathering with your new circle.";
+  const proposalSpeech = (p) => `Here's what I found for you. ${p.title.replace(/[\[\]]/g, "")}, this ${p.dayName}. ${p.ask}`;
+  const confirmText = (p, name) => {
+    const when = p.items.find(([k]) => k === "When")[1];
+    return `Wonderful${name ? ", " + name : ""}. Your seat is reserved for **${when}**.\nThis group is now your circle, **${p.circle}**. After ${p.dayName} I'll check in to hear how it felt, and I'll keep the circle going with a new gathering about every two weeks.`;
+  };
+
   const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   function buildProposal(area, kind) {
@@ -306,28 +315,100 @@
       vs.find((v) => v.lang && v.lang.startsWith("en")) || null;
   }
   if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
+  // belong's voice: every scripted line is pre-recorded (audio/<key>.mp3).
+  // Anything not recorded (e.g. a different typed name) falls back to browser speech.
+  const cleanSpeech = (text) => text.replace(/\*\*/g, "").replace(/[\[\]]/g, "").replace(/\s+/g, " ").trim();
+  function audioKey(text) {
+    let h = 0x811c9dc5;
+    const s = cleanSpeech(text);
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, "0");
+  }
+  const player = new Audio();
+  player.preload = "auto";
+  let speechSeq = 0;
+  let stopCurrent = null;
+  const SILENT = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+  function lastAvatar() {
+    const rows = messages.querySelectorAll(".row.agent");
+    return rows.length ? rows[rows.length - 1].querySelector(".avatar") : null;
+  }
   function speak(text) {
-    if (!synth || !speakOn) { lastSpeech = Promise.resolve(); return lastSpeech; }
-    synth.cancel();
-    const clean = text.replace(/\*\*/g, "").replace(/[\[\]]/g, "");
+    hush();
+    if (!speakOn) { lastSpeech = Promise.resolve(); return lastSpeech; }
+    const seq = ++speechSeq;
+    const av = lastAvatar();
+    lastSpeech = new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        av && av.classList.remove("speaking");
+        player.onended = player.onerror = player.onplaying = null;
+        if (stopCurrent === finish) stopCurrent = null;
+        resolve();
+      };
+      stopCurrent = finish;
+      player.onplaying = () => av && av.classList.add("speaking");
+      player.onended = finish;
+      player.onerror = () => {
+        if (seq !== speechSeq) return finish();
+        browserSpeak(text, av).then(finish);
+      };
+      player.src = `audio/${audioKey(text)}.mp3`;
+      const p = player.play();
+      if (p && p.catch) p.catch(() => { if (seq === speechSeq && !done) browserSpeak(text, av).then(finish); });
+    });
+    return lastSpeech;
+  }
+  function browserSpeak(text, av) {
+    if (!synth || !speakOn) return Promise.resolve();
+    const clean = cleanSpeech(text);
     const u = new SpeechSynthesisUtterance(clean);
     if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-GB"; }
-    u.rate = 1.0;
-    u.pitch = 1.05;
-    const rows = messages.querySelectorAll(".row.agent");
-    const av = rows.length ? rows[rows.length - 1].querySelector(".avatar") : null;
-    lastSpeech = new Promise((resolve) => {
+    return new Promise((resolve) => {
       let done = false;
       const finish = () => { if (done) return; done = true; av && av.classList.remove("speaking"); resolve(); };
       u.onstart = () => av && av.classList.add("speaking");
       u.onend = u.onerror = finish;
-      // Some browsers never fire onend; fall back to an estimate.
       setTimeout(finish, 1500 + clean.length * 75);
+      synth.speak(u);
     });
-    synth.speak(u);
-    return lastSpeech;
   }
-  function hush() { if (synth) synth.cancel(); }
+  function hush() {
+    speechSeq++;
+    if (stopCurrent) stopCurrent();
+    try { player.pause(); } catch (e) {}
+    if (synth) synth.cancel();
+    const av = lastAvatar(); av && av.classList.remove("speaking");
+  }
+
+  // Every line belong can say, for pre-recording. Mirrors the flow below.
+  window.__belongLines = () => {
+    const out = new Set();
+    const add = (t) => out.add(cleanSpeech(t));
+    add(qText(0, [], ""));
+    for (let i = 0; i < 2; i++) {
+      for (const o of STEPS[i].options) add((o.ack ? o.ack + " " : "") + qText(i + 1, [], ""));
+    }
+    const t0 = STEPS[0].options.map((o) => o.trait);
+    const t1 = STEPS[1].options.map((o) => o.trait);
+    const t2 = STEPS[2].options.map((o) => o.trait).concat(STEPS[2].voiceTrait);
+    const t0Typed = (STEPS[0].options.find((o) => o.def) || {}).trait;
+    for (const a of t0) for (const b of t1) for (const c of t2) {
+      add(qText(3, [a, b, c], ""));
+      if (a === t0Typed) add(qText(3, [a, b, c], "Wyatt"));
+    }
+    for (const o of STEPS[3].options) add(o.repeat ? o.ack : o.ack + " " + qText(4, [], ""));
+    add(LINE_MATCHING); add(LINE_ALT); add(LINE_DONE);
+    for (const ar of Object.keys(AREAS)) for (const kind of ["main", "alt"]) {
+      const p = buildProposal(ar, kind);
+      add(proposalSpeech(p));
+      add(confirmText(p, "")); add(confirmText(p, "Wyatt"));
+    }
+    return [...out].map((text) => ({ key: audioKey(text), text }));
+  };
+
 
   // ---------- Voice dock ----------
   function setMic(state) {
@@ -444,7 +525,7 @@
     }));
     phase = "proposal";
     scrollDown();
-    speak(`Here's what I found for you. ${p.title.replace(/[\[\]]/g, "")}, this ${p.dayName}. ${p.ask}`);
+    speak(proposalSpeech(p));
   }
 
   function disableChips() {
@@ -452,10 +533,11 @@
   }
 
   // ---------- Flow ----------
-  function questionText(i) {
+  function qText(i, t, name) {
     const q = STEPS[i].q;
-    return typeof q === "function" ? q(traits, userName) : q;
+    return typeof q === "function" ? q(t, name) : q;
   }
+  function questionText(i) { return qText(i, traits, userName); }
 
   // Render the multiple-choice answers under belong's question.
   function showChoices(i, exclude = []) {
@@ -543,7 +625,7 @@
 
     if (s.final) {
       area = opt.area || "east";
-      await agentSay("Perfect. One moment please. I'm finding exactly the right space and soul for you in London...");
+      await agentSay(LINE_MATCHING);
       await sleep(400);
       await runMatching();
       await showProposal("main");
@@ -572,24 +654,20 @@
       const wantsAlt = !usedAlt && /another|other|different|else|no\b|not really|alternative/i.test(text);
       if (wantsAlt) {
         usedAlt = true;
-        await agentSay("Of course. Here's another gathering I think would suit you just as well.", { think: 700 });
+        await agentSay(LINE_ALT, { think: 700 });
         await showProposal("alt");
       } else {
         await confirmPlan();
       }
     } else {
-      await agentSay("I'll be here whenever you need me. Enjoy your first gathering with your new circle.", { think: 700 });
+      await agentSay(LINE_DONE, { think: 700 });
     }
     agentDone();
   }
 
   async function confirmPlan() {
     const p = buildProposal(area, currentKind);
-    const when = p.items.find(([k]) => k === "When")[1];
-    await agentSay(
-      `Wonderful${userName ? ", " + userName : ""}. Your seat is reserved for **${when}**.\nThis group is now your circle, **${p.circle}**. After ${p.dayName} I'll check in to hear how it felt, and I'll keep the circle going with a new gathering about every two weeks.`,
-      { think: 900 }
-    );
+    await agentSay(confirmText(p, userName), { think: 900 });
     addUpcoming(p);
     phase = "done";
   }
@@ -795,8 +873,9 @@
   }
 
   $("beginBtn").addEventListener("click", async () => {
-    // A silent utterance inside the tap unlocks speech on mobile browsers.
+    // Playing something inside the tap unlocks audio on mobile browsers.
     if (synth) synth.speak(new SpeechSynthesisUtterance(""));
+    try { player.src = SILENT; const p = player.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
     splash.classList.add("leaving");
     await sleep(420);
     splash.hidden = true;

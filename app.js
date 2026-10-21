@@ -56,10 +56,10 @@
       ask: "Does this feel like the right way to spend your London weekend?"
     },
     alt: {
-      title: "[ Quiet Design Walk & Supper — Kensington ]",
-      history: "Design Walk & Supper in Kensington",
+      title: "[ Quiet Design Walk — Kensington ]",
+      history: "Quiet Design Walk in Kensington",
       items: [
-        ["Activity", "A slow, guided walk through the Design Museum's permanent collection, followed by a long-table supper."],
+        ["Activity", "A slow walk through the Design Museum's permanent collection, then a short stroll through Holland Park to share what caught your eye."],
         ["When", "This Saturday, 4:30 PM"],
         ["Where", "Design Museum, Kensington High Street"],
         ["Group", "5 people (including you)"]

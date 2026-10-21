@@ -4,7 +4,7 @@
   // ---------- Demo script ----------
   // Each step: the question belong asks and the multiple-choice answers.
   // ack = belong's reaction to that answer, trait = what it learns.
-  // voice/voiceAck/voiceTrait = the path used by the mic button or a typed answer.
+  // voice/voiceTrait = the path used by the mic button or a typed answer.
   const STEPS = [
     {
       q: "Hi. I'm belong, your social discovery agent. By getting to know your personality and preferences, I'll suggest the most compatible people and activities in London for you.\nI'm curious—if it were a soft rainy evening in London, would you find yourself more drawn to a bustling pub filled with overlapping conversations, or a quiet living room where only the sound of rain reaches the windows?",
@@ -43,131 +43,229 @@
       voice: "okay please arrange a activity and group.",
       options: [
         { label: "Yes, please arrange an activity and a group", ack: "Wonderful.", def: true },
-        { label: "How does it work?", ack: "I'll find a small group whose personalities fit yours, choose a place and time that suit everyone, and take care of the booking. All you need to do is say yes.\nShall I go ahead?", repeat: true }
+        { label: "How does it work?", ack: "I'll find a small group whose personalities fit yours, choose a place and time that suit everyone, and take care of the booking. All you need to do is say yes. And if it clicks, I'll keep the same group meeting regularly as your circle.\nShall I go ahead?", repeat: true }
       ]
     },
     {
       q: "I'll design a meeting for you. Which **area** in London do you prefer, and what **time** usually works best for you?",
-      voice: "mayfair or kensington area would be better, and from saturday afternoon to night would be good",
+      voice: "shoreditch or hackney would be great, and saturday evening works best for me",
       final: true,
       options: [
-        { label: "Mayfair or Kensington · Saturday afternoon to night", def: true },
-        { label: "Shoreditch or Hackney · Friday evening" },
-        { label: "South Bank · Sunday afternoon" },
-        { label: "Anywhere central · Weekday evenings" }
+        { label: "Shoreditch or Hackney · Saturday evening", area: "east", def: true },
+        { label: "Mayfair or Kensington · Saturday afternoon to night", area: "west" },
+        { label: "South Bank · Sunday afternoon", area: "south" },
+        { label: "Anywhere central · Weekday evenings", area: "central" }
       ]
     }
   ];
 
-  const PROPOSALS = {
+  // ---------- Proposals, by area ----------
+  // Two kinds of gathering fit the demo persona; the venue and time follow the chosen area.
+  const KINDS = {
     main: {
-      title: "[ The Analog Listening Session — Soho ]",
-      history: "Analog Listening Session in Soho",
-      items: [
-        ["Activity", "Sharing a curated list of records and the stories they evoke in a private listening room."],
-        ["When", "This Saturday, 8:00 PM"],
-        ["Where", "'Spiritland', Royal Festival Hall (Reserved Alcove)"],
-        ["Group", "6 people (including you)"]
-      ],
+      title: (p) => `[ The Analog Listening Session — ${p} ]`,
+      history: (p) => `Analog Listening Session in ${p}`,
+      activity: "Sharing a curated list of records and the stories they evoke in a private listening room.",
+      circle: "The Analog Circle",
       members: [
-        ["Clara", "Interior designer \u00b7 restores old turntables"],
-        ["James", "Architect \u00b7 collects 70s jazz pressings"],
-        ["Noor", "UX researcher \u00b7 loves ambient music"],
-        ["Oliver", "Photographer \u00b7 shoots empty spaces"],
-        ["Yuna", "Product manager \u00b7 new to London"]
+        ["Clara", "Interior designer · restores old turntables"],
+        ["James", "Architect · collects 70s jazz pressings"],
+        ["Noor", "UX researcher · loves ambient music"],
+        ["Oliver", "Photographer · shoots empty spaces"],
+        ["Yuna", "Product manager · new to London"]
       ],
       group: "You will be joined by five other individuals who share your appreciation for minimalism, architectural detail, and the quiet warmth of analog sound in a fast-paced city.",
       ask: "Does this feel like the right way to spend your London weekend?"
     },
     alt: {
-      title: "[ Quiet Design Walk — Kensington ]",
-      history: "Quiet Design Walk in Kensington",
-      items: [
-        ["Activity", "A slow walk through the Design Museum's permanent collection, then a short stroll through Holland Park to share what caught your eye."],
-        ["When", "This Saturday, 4:30 PM"],
-        ["Where", "Design Museum, Kensington High Street"],
-        ["Group", "5 people (including you)"]
-      ],
+      title: (p) => `[ Quiet Design Walk — ${p} ]`,
+      history: (p) => `Quiet Design Walk in ${p}`,
+      circle: "The Detail Walkers",
       members: [
-        ["Ella", "Furniture maker \u00b7 loves mid-century design"],
-        ["Marcus", "Architecture student \u00b7 sketches buildings"],
-        ["Rin", "Ceramicist \u00b7 notices every material"],
-        ["Hugo", "Lighting designer \u00b7 quiet observer"]
+        ["Ella", "Furniture maker · loves mid-century design"],
+        ["Marcus", "Architecture student · sketches buildings"],
+        ["Rin", "Ceramicist · notices every material"],
+        ["Hugo", "Lighting designer · quiet observer"]
       ],
       group: "You will be joined by four others who notice the details—light, materials, and the stories behind everyday objects—and who prefer a long conversation to a loud room.",
       ask: "Would you like this one instead?"
     }
   };
 
-  // Past gatherings shown in History. "reflection" is the user's own notes after
-  // the meeting, summarized by belong.
-  const BASE_HISTORY = [
-    {
-      t: "Late Night Jazz in Shoreditch", d: "2024. 05. 12",
-      when: "Sunday, 12 May 2024 · 9:00 PM",
-      where: "Nightjar, City Road, Shoreditch",
-      activity: "An intimate late-night set from a jazz trio, with time to talk between sets.",
-      members: [
-        ["Maya", "Architect · collects Blue Note records"],
-        ["Tom", "Sound engineer · plays double bass"],
-        ["Priya", "Product designer · new to London"],
-        ["Daniel", "Teacher · quiet, sharp sense of humour"]
-      ],
-      reflection: {
-        summary: "I went in a little tired and expected to stay for one set. I stayed for three. Talking about music between sets made it easy to skip the small talk, and it was the first time in a while I felt properly listened to.",
-        highlights: [
-          "Maya and I talked about how a space changes the way music sounds",
-          "Tom recommended a record shop in Dalston I want to visit",
-          "The bar was a bit loud in the first set; the corner table worked better"
-        ],
-        keep: ["Maya", "Tom"],
-        learned: "You open up most around shared, specific interests. Next time I'll pick quieter seating."
-      }
+  const AREAS = {
+    east: {
+      label: "Shoreditch & Hackney",
+      main: { place: "Dalston", where: "Brilliant Corners, Dalston (Reserved listening corner)", day: 6, time: "7:30 PM" },
+      alt: { place: "Hoxton", where: "Museum of the Home, Hoxton", day: 6, time: "3:00 PM",
+        activity: "A slow walk through 400 years of London living rooms, then a coffee nearby to share what caught your eye." }
     },
-    {
-      t: "Hampstead Heath Morning Walk", d: "2024. 04. 28",
-      when: "Sunday, 28 April 2024 · 8:00 AM",
-      where: "Parliament Hill entrance, Hampstead Heath",
-      activity: "A slow 90-minute walk across the Heath, ending with coffee at the Lido café.",
-      members: [
-        ["Hannah", "Nurse · early riser, loves birdwatching"],
-        ["Leo", "Data analyst · training for a half marathon"],
-        ["Sofia", "PhD student · moved from Lisbon last year"]
-      ],
-      reflection: {
-        summary: "Walking side by side made conversation feel natural. Nobody had to fill the silence. It was early, but the view from Parliament Hill made it worth it, and I left feeling calmer than I had all week.",
-        highlights: [
-          "Sofia and I swapped tips on settling into London",
-          "Hannah pointed out birds I'd never noticed",
-          "Would prefer a slightly later start next time"
-        ],
-        keep: ["Sofia"],
-        learned: "Outdoor, side-by-side activities suit you well. I'll avoid starts before 9 AM."
-      }
+    west: {
+      label: "Mayfair & Kensington",
+      main: { place: "Kensington", where: "Partner listening room, Kensington Church Street", day: 6, time: "6:00 PM" },
+      alt: { place: "Kensington", where: "Design Museum, Kensington High Street", day: 6, time: "4:30 PM",
+        activity: "A slow walk through the Design Museum's permanent collection, then a short stroll through Holland Park to share what caught your eye." }
     },
-    {
-      t: "Quiet Reading in Bloomsbury", d: "2024. 03. 15",
-      when: "Friday, 15 March 2024 · 2:00 PM",
-      where: "London Review Cake Shop, Bloomsbury",
-      activity: "An hour of silent reading together, then a short chat about what everyone was reading.",
-      members: [
-        ["Grace", "Editor · reads mostly poetry"],
-        ["Sam", "Software engineer · into science fiction"],
-        ["Aiko", "Illustrator · sketches while she reads"],
-        ["Ben", "Civil servant · history buff"]
-      ],
-      reflection: {
-        summary: "My first belong gathering. I was nervous, but the silent hour took the pressure off. By the time we started talking, it already felt like we had shared something.",
-        highlights: [
-          "Grace lent me a poetry collection I'm still reading",
-          "Liked that there was no pressure to talk at first",
-          "Could have used a little more time for the chat afterwards"
-        ],
-        keep: ["Grace", "Aiko"],
-        learned: "A quiet start helps you settle in. I'll keep that format for first meetings."
-      }
+    south: {
+      label: "the South Bank",
+      main: { place: "South Bank", where: "'Spiritland', Royal Festival Hall (Reserved Alcove)", day: 0, time: "4:00 PM" },
+      alt: { place: "South Bank", where: "Hayward Gallery, Southbank Centre", day: 0, time: "2:00 PM",
+        activity: "An unhurried visit to the Hayward Gallery, then a walk along the Thames to talk it through." }
+    },
+    central: {
+      label: "central London",
+      main: { place: "Soho", where: "Partner listening room, Soho", day: 4, time: "7:30 PM" },
+      alt: { place: "Bloomsbury", where: "British Museum, Bloomsbury (Friday late opening)", day: 5, time: "6:00 PM",
+        activity: "A quiet evening wander through the British Museum's late opening, focusing on a few favourite objects." }
     }
-  ];
+  };
+
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  function buildProposal(area, kind) {
+    const a = AREAS[area][kind], k = KINDS[kind];
+    return {
+      title: k.title(a.place),
+      history: k.history(a.place),
+      circle: k.circle,
+      day: a.day,
+      dayName: DAY_NAMES[a.day],
+      items: [
+        ["Activity", a.activity || k.activity],
+        ["When", `This ${DAY_NAMES[a.day]}, ${a.time}`],
+        ["Where", a.where],
+        ["Group", `${k.members.length + 1} people (including you)`]
+      ],
+      members: k.members,
+      group: k.group,
+      ask: k.ask
+    };
+  }
+
+  // ---------- Dates (kept relative to today so the demo never looks stale) ----------
+  function weekdayBefore(weekday, weeksBack) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() - 1);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+    d.setDate(d.getDate() - 7 * weeksBack);
+    return d;
+  }
+  function nextWeekday(weekday) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() + 1);
+    return d;
+  }
+  const shortDate = (d) => `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`;
+  const longDate = (d) => d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  // ---------- Circles in History ----------
+  // Each circle is a group belong keeps meeting. Gatherings carry the user's
+  // own reflection, summarized by belong.
+  function baseCircles() {
+    const g = (weekday, weeksBack, time, data) => {
+      const d = weekdayBefore(weekday, weeksBack);
+      return Object.assign({ d: shortDate(d), when: `${longDate(d)} · ${time}` }, data);
+    };
+    return [
+      {
+        name: "Night Listeners",
+        cadence: "every 2 weeks",
+        members: [
+          ["Maya", "Architect · collects Blue Note records"],
+          ["Tom", "Sound engineer · plays double bass"],
+          ["Priya", "Product designer · new to London"],
+          ["Daniel", "Teacher · quiet, sharp sense of humour"]
+        ],
+        gatherings: [
+          g(6, 0, "9:00 PM", {
+            t: "Late Night Jazz in Shoreditch", n: 2,
+            where: "Nightjar, City Road, Shoreditch",
+            activity: "An intimate late-night set from a jazz trio, with time to talk between sets.",
+            reflection: {
+              summary: "I went in a little tired and expected to stay for one set. I stayed for three. Seeing the same faces again made it easy to skip the small talk, and it was the first time in a while I felt properly listened to.",
+              highlights: [
+                "Maya and I picked up our conversation from the vinyl swap",
+                "Tom recommended a record shop in Dalston I want to visit",
+                "The bar was a bit loud in the first set; the corner table worked better"
+              ],
+              keep: ["Maya", "Tom"],
+              learned: "The second gathering felt warmer than the first. I'll keep this circle going and pick quieter seating next time."
+            }
+          }),
+          g(6, 2, "2:00 PM", {
+            t: "Vinyl Swap in Hoxton", n: 1,
+            where: "Love Vinyl, Hoxton Street",
+            activity: "Everyone brought two records to trade, and the story behind one of them.",
+            reflection: {
+              summary: "I almost didn't come. Having a record in my hand gave me something to talk about straight away, and by the end we were already planning what to listen to next time.",
+              highlights: [
+                "Traded a Bill Evans record with Maya",
+                "Daniel's story about his dad's record collection stayed with me",
+                "Two hours felt just right"
+              ],
+              keep: ["Maya", "Tom", "Daniel"],
+              learned: "Having an object to share breaks the ice for you. I suggested the same group meet again in two weeks."
+            }
+          })
+        ]
+      },
+      {
+        name: "Heath Walkers",
+        cadence: "every 3 weeks",
+        members: [
+          ["Hannah", "Nurse · early riser, loves birdwatching"],
+          ["Leo", "Data analyst · training for a half marathon"],
+          ["Sofia", "PhD student · moved from Lisbon last year"]
+        ],
+        gatherings: [
+          g(0, 1, "8:00 AM", {
+            t: "Hampstead Heath Morning Walk", n: 1,
+            where: "Parliament Hill entrance, Hampstead Heath",
+            activity: "A slow 90-minute walk across the Heath, ending with coffee at the Lido café.",
+            reflection: {
+              summary: "Walking side by side made conversation feel natural. Nobody had to fill the silence. It was early, but the view from Parliament Hill made it worth it, and I left feeling calmer than I had all week.",
+              highlights: [
+                "Sofia and I swapped tips on settling into London",
+                "Hannah pointed out birds I'd never noticed",
+                "Would prefer a slightly later start next time"
+              ],
+              keep: ["Sofia"],
+              learned: "Outdoor, side-by-side activities suit you well. The next walk starts at 10 AM."
+            }
+          })
+        ]
+      },
+      {
+        name: "Bloomsbury Readers",
+        cadence: "monthly",
+        members: [
+          ["Grace", "Editor · reads mostly poetry"],
+          ["Sam", "Software engineer · into science fiction"],
+          ["Aiko", "Illustrator · sketches while she reads"],
+          ["Ben", "Civil servant · history buff"]
+        ],
+        gatherings: [
+          g(6, 4, "2:00 PM", {
+            t: "Quiet Reading in Bloomsbury", n: 1,
+            where: "London Review Cake Shop, Bloomsbury",
+            activity: "An hour of silent reading together, then a short chat about what everyone was reading.",
+            reflection: {
+              summary: "My first belong gathering. I was nervous, but the silent hour took the pressure off. By the time we started talking, it already felt like we had shared something.",
+              highlights: [
+                "Grace lent me a poetry collection I'm still reading",
+                "Liked that there was no pressure to talk at first",
+                "Could have used a little more time for the chat afterwards"
+              ],
+              keep: ["Grace", "Aiko"],
+              learned: "A quiet start helps you settle in. I'll keep that format for first meetings."
+            }
+          })
+        ]
+      }
+    ];
+  }
 
   // ---------- Elements ----------
   const $ = (id) => document.getElementById(id);
@@ -176,23 +274,96 @@
   const settingsBtn = $("settingsBtn"), settingsMenu = $("settingsMenu");
   const drawer = $("drawer"), scrim = $("scrim"), historyEl = $("history");
   const detail = $("detail"), detailBody = $("detailBody");
+  const voiceBtn = $("voiceBtn");
+  const dock = $("dock"), bigMic = $("bigMic"), caption = $("caption"), voiceStatus = $("voiceStatus"), switchBtn = $("switchBtn");
 
   // ---------- State ----------
   let step = 0;
   let busy = false;
   let userName = "";
   let phase = "chat"; // chat | proposal | done
-  let currentProposal = "main";
+  let area = "east";
+  let currentKind = "main";
   let usedAlt = false;
   let traits = [];
-  let history = BASE_HISTORY.slice();
+  let circles = baseCircles();
   let typingTimer = null;
+  let inputMode = "voice"; // voice | type
+  let speakOn = true;
+  let lastSpeech = Promise.resolve();
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // ---------- Voice output (talk mode) ----------
+  const synth = window.speechSynthesis;
+  let voice = null;
+  function pickVoice() {
+    if (!synth) return;
+    const vs = synth.getVoices();
+    const prefer = ["Google UK English Female", "Serena", "Kate", "Martha", "Stephanie", "Microsoft Libby", "Microsoft Sonia"];
+    voice = vs.find((v) => prefer.some((p) => v.name.includes(p))) ||
+      vs.find((v) => v.lang === "en-GB") ||
+      vs.find((v) => v.lang && v.lang.startsWith("en")) || null;
+  }
+  if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
+  function speak(text) {
+    if (!synth || !speakOn) { lastSpeech = Promise.resolve(); return lastSpeech; }
+    synth.cancel();
+    const clean = text.replace(/\*\*/g, "").replace(/[\[\]]/g, "");
+    const u = new SpeechSynthesisUtterance(clean);
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-GB"; }
+    u.rate = 1.0;
+    u.pitch = 1.05;
+    const rows = messages.querySelectorAll(".row.agent");
+    const av = rows.length ? rows[rows.length - 1].querySelector(".avatar") : null;
+    lastSpeech = new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; av && av.classList.remove("speaking"); resolve(); };
+      u.onstart = () => av && av.classList.add("speaking");
+      u.onend = u.onerror = finish;
+      // Some browsers never fire onend; fall back to an estimate.
+      setTimeout(finish, 1500 + clean.length * 75);
+    });
+    synth.speak(u);
+    return lastSpeech;
+  }
+  function hush() { if (synth) synth.cancel(); }
+
+  // ---------- Voice dock ----------
+  function setMic(state) {
+    dock.dataset.state = state; // busy | listening | talking
+    voiceStatus.textContent =
+      state === "listening" ? "Listening\u2026 tap the mic to answer" :
+      state === "talking" ? "" :
+      (speakOn ? "belong is speaking\u2026" : "belong is thinking\u2026");
+  }
+  // Called when belong has finished a turn: once it stops talking, the mic turns on.
+  function agentDone() {
+    busy = false;
+    const myTurn = lastSpeech;
+    myTurn.then(() => {
+      if (!busy && lastSpeech === myTurn && inputMode === "voice" && !typingTimer) setMic("listening");
+    });
+  }
+  function setInputMode(m) {
+    inputMode = m;
+    dock.classList.toggle("voice", m === "voice");
+    dock.classList.toggle("type", m === "type");
+    switchBtn.setAttribute("aria-label", m === "voice" ? "Switch to typing" : "Switch to voice");
+    stopTyping();
+    caption.textContent = "";
+    if (m === "type") {
+      setSpeakOn(false);
+      if (window.matchMedia("(hover: hover)").matches) input.focus();
+    } else {
+      setSpeakOn(true);
+      setMic(busy ? "busy" : "listening");
+    }
+  }
+
   // ---------- Rendering ----------
   function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
   function fmt(s) {
     return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
@@ -220,21 +391,21 @@
   async function agentSay(text, { think = 1100 } = {}) {
     const b = addRow("agent", '<span class="typing"><span></span><span></span><span></span></span>');
     await sleep(think + Math.min(text.length * 6, 900));
-    const name = userName ? `Thank you, ${userName}. ` : "";
-    b.innerHTML = fmt(text.replace("{name}", name));
+    b.innerHTML = fmt(text);
     scrollDown();
+    speak(text);
     return b;
   }
 
   async function runMatching() {
     const steps = [
       "Reading your personality signals",
-      "Finding spaces in your preferred area",
+      `Finding spaces in ${AREAS[area].label}`,
       "Matching compatible people",
       "Reserving the best time slot"
     ];
     const b = addRow("agent", '<div class="matching">' +
-      steps.map((s) => `<div class="step"><span class="dot"></span>${s}</div>`).join("") + "</div>");
+      steps.map((s) => `<div class="step"><span class="dot"></span>${escapeHtml(s)}</div>`).join("") + "</div>");
     const els = b.querySelectorAll(".step");
     for (let i = 0; i < els.length; i++) {
       els[i].classList.add("on");
@@ -246,8 +417,7 @@
     b.closest(".row").remove();
   }
 
-  function proposalHtml(key) {
-    const p = PROPOSALS[key];
+  function proposalHtml(p) {
     const items = p.items.map(([k, v]) => `<li><strong>${k}</strong>: ${escapeHtml(v)}</li>`).join("");
     const people = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c2.9.3 5.5 2.6 5.5 5.8"/></svg>';
     return `<div class="proposal">
@@ -262,18 +432,19 @@
     </div>`.replace(/\n\s*/g, "");
   }
 
-  async function showProposal(key) {
-    currentProposal = key;
+  async function showProposal(kind) {
+    currentKind = kind;
+    const p = buildProposal(area, kind);
     const b = addRow("agent", '<span class="typing"><span></span><span></span><span></span></span>');
     await sleep(900);
-    b.innerHTML = proposalHtml(key);
+    b.innerHTML = proposalHtml(p);
     b.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
       if (busy) return;
-      const act = c.dataset.act;
-      send(act === "yes" ? "Yes, count me in." : "Could you show me another option?");
+      send(c.dataset.act === "yes" ? "Yes, count me in." : "Could you show me another option?");
     }));
     phase = "proposal";
     scrollDown();
+    speak(`Here's what I found for you. ${p.title.replace(/[\[\]]/g, "")}, this ${p.dayName}. ${p.ask}`);
   }
 
   function disableChips() {
@@ -299,7 +470,6 @@
       btn.innerHTML = `<span class="letter">${letters[k]}</span><span>${escapeHtml(o.label)}</span>`;
       btn.addEventListener("click", () => {
         if (busy) return;
-        btn.classList.add("picked");
         answer(o.label, o);
       });
       btn.style.animationDelay = (k * 70) + "ms";
@@ -320,7 +490,7 @@
     await sleep(500);
     await agentSay(questionText(0), { think: 900 });
     showChoices(0);
-    busy = false;
+    agentDone();
   }
 
   function captureName(text) {
@@ -328,6 +498,12 @@
     if (m && !/^(a|an|the|so|very|really|not|fine|good|okay|ok)$/i.test(m[1])) {
       userName = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
     }
+  }
+  function areaFromText(text) {
+    if (/mayfair|kensington|chelsea|notting/i.test(text)) return "west";
+    if (/south ?bank|waterloo|southwark/i.test(text)) return "south";
+    if (/central|soho|covent|bloomsbury|anywhere|weekday/i.test(text)) return "central";
+    return "east";
   }
 
   // Typed text and mic input go here; choice buttons call answer() directly.
@@ -337,7 +513,7 @@
     if (phase === "chat") {
       const s = STEPS[step];
       const def = s.options.find((o) => o.def) || s.options[0];
-      answer(text, { ack: def.ack, trait: s.voiceTrait || def.trait, typed: true });
+      answer(text, { ack: def.ack, trait: s.voiceTrait || def.trait, area: s.final ? areaFromText(text) : undefined, typed: true });
     } else {
       answerAfterChat(text);
     }
@@ -345,6 +521,9 @@
 
   async function answer(text, opt) {
     busy = true;
+    hush();
+    setMic("busy");
+    caption.textContent = "";
     stopTyping();
     closeChoices();
     addRow("user", fmt(text));
@@ -356,18 +535,19 @@
     if (opt.repeat) {
       await agentSay(opt.ack);
       showChoices(step, s.options.filter((o) => o.repeat));
-      busy = false;
+      agentDone();
       return;
     }
 
     if (opt.trait) traits[step] = opt.trait;
 
     if (s.final) {
+      area = opt.area || "east";
       await agentSay("Perfect. One moment please. I'm finding exactly the right space and soul for you in London...");
       await sleep(400);
       await runMatching();
       await showProposal("main");
-      busy = false;
+      agentDone();
       return;
     }
 
@@ -375,11 +555,14 @@
     const lead = opt.ack ? opt.ack + " " : "";
     await agentSay(lead + questionText(step));
     showChoices(step);
-    busy = false;
+    agentDone();
   }
 
   async function answerAfterChat(text) {
     busy = true;
+    hush();
+    setMic("busy");
+    caption.textContent = "";
     stopTyping();
     addRow("user", fmt(text));
     input.value = "";
@@ -395,60 +578,80 @@
         await confirmPlan();
       }
     } else {
-      await agentSay("I'll be here whenever you'd like to discover something new. Enjoy your weekend in London.", { think: 700 });
+      await agentSay("I'll be here whenever you need me. Enjoy your first gathering with your new circle.", { think: 700 });
     }
-    busy = false;
+    agentDone();
   }
 
   async function confirmPlan() {
-    const p = PROPOSALS[currentProposal];
+    const p = buildProposal(area, currentKind);
     const when = p.items.find(([k]) => k === "When")[1];
     await agentSay(
-      `Wonderful${userName ? ", " + userName : ""}. Your seat is reserved for **${when}**.\nI've introduced you to the group and saved the details to your History. I'll check in after the gathering to learn what felt right—so the next suggestion fits you even better.`,
+      `Wonderful${userName ? ", " + userName : ""}. Your seat is reserved for **${when}**.\nThis group is now your circle, **${p.circle}**. After ${p.dayName} I'll check in to hear how it felt, and I'll keep the circle going with a new gathering about every two weeks.`,
       { think: 900 }
     );
-    addHistory(p);
+    addUpcoming(p);
     phase = "done";
   }
 
   // ---------- History ----------
-  function renderHistory(newTitle) {
-    historyEl.innerHTML = history.map((h, i) => `
-      <li class="${h.t === newTitle ? "new" : ""}" data-i="${i}" tabindex="0" role="button">
-        <span class="q">”</span>
-        <div class="info">
-          <div class="t">${escapeHtml(h.t)}</div>
-          <div class="meta"><span class="city">London</span><span class="date">${h.upcoming ? "Upcoming" : h.d}</span></div>
+  function avatarStack(members) {
+    return `<span class="stack">${members.slice(0, 3).map(([n]) => `<span class="m-av xs">${initials(n)}</span>`).join("")}</span>`;
+  }
+  function renderHistory(highlight) {
+    historyEl.innerHTML = circles.map((c, ci) => `
+      <li class="circle ${c.name === highlight ? "new" : ""}">
+        <div class="circle-head">
+          <div>
+            <div class="c-name">${escapeHtml(c.name)}${c.isNew ? '<span class="c-new">New</span>' : ""}</div>
+            <div class="c-meta">You + ${c.members.length} · ${escapeHtml(c.cadence)}</div>
+          </div>
+          ${avatarStack(c.members)}
         </div>
-      </li>`).join("");
-    historyEl.querySelectorAll("li").forEach((li) => {
-      const open = () => openDetail(history[+li.dataset.i]);
+        <ul class="gatherings">
+          ${c.gatherings.map((g, gi) => `
+            <li class="gathering" data-c="${ci}" data-g="${gi}" tabindex="0" role="button">
+              <span class="q">”</span>
+              <div class="info">
+                <div class="t">${escapeHtml(g.t)}</div>
+                <div class="meta"><span class="city">Gathering ${g.n}</span><span class="date ${g.upcoming ? "up" : ""}">${g.upcoming ? "Upcoming" : g.d}</span></div>
+              </div>
+            </li>`).join("")}
+        </ul>
+      </li>`).join("").replace(/\n\s*/g, "");
+    historyEl.querySelectorAll(".gathering").forEach((li) => {
+      const open = () => {
+        const c = circles[+li.dataset.c];
+        openDetail(c, c.gatherings[+li.dataset.g]);
+      };
       li.addEventListener("click", open);
       li.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
     });
   }
-  function addHistory(p) {
-    const now = new Date();
-    const sat = new Date(now);
-    sat.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7 || 7));
-    const d = `${sat.getFullYear()}. ${String(sat.getMonth() + 1).padStart(2, "0")}. ${String(sat.getDate()).padStart(2, "0")}`;
+  function addUpcoming(p) {
+    const date = nextWeekday(p.day);
     const get = (k) => (p.items.find(([key]) => key === k) || [])[1];
-    const day = sat.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const time = (get("When") || "").split(",").pop().trim();
-    history.unshift({
-      t: p.history, d, upcoming: true,
-      when: `${day} · ${time}`,
-      where: get("Where"),
-      activity: get("Activity"),
-      members: p.members
+    circles.unshift({
+      name: p.circle,
+      cadence: "every 2 weeks",
+      isNew: true,
+      members: p.members,
+      gatherings: [{
+        t: p.history, n: 1, upcoming: true,
+        d: shortDate(date),
+        when: `${longDate(date)} · ${time}`,
+        where: get("Where"),
+        activity: get("Activity")
+      }]
     });
-    renderHistory(p.history);
+    renderHistory(p.circle);
   }
 
   function initials(n) { return n.slice(0, 1).toUpperCase(); }
 
-  function openDetail(h) {
-    const members = (h.members || []).map(([n, tag]) => `
+  function openDetail(c, h) {
+    const members = c.members.map(([n, tag]) => `
       <li><span class="m-av">${initials(n)}</span><div><div class="m-name">${escapeHtml(n)}</div><div class="m-tag">${escapeHtml(tag)}</div></div></li>`).join("");
     let reflection;
     if (h.reflection) {
@@ -476,10 +679,22 @@
         <h2>${escapeHtml(h.t)}</h2>
         <p>${escapeHtml(h.activity || "")}</p>
       </div>
+      <section class="d-card circle-card">
+        <div class="cc-top">
+          <div>
+            <div class="cc-label">Your circle</div>
+            <div class="cc-name">${escapeHtml(c.name)}</div>
+          </div>
+          <span class="cc-count">Gathering ${h.n}</span>
+        </div>
+        <p class="cc-note">${h.upcoming
+          ? "Your first gathering together. If it clicks, belong will keep this circle meeting " + escapeHtml(c.cadence) + "."
+          : "belong keeps this circle meeting " + escapeHtml(c.cadence) + " and suggests the next gathering after each one."}</p>
+      </section>
       <section class="d-card">
         <div class="d-row"><span class="d-k">When</span><span class="d-v">${escapeHtml(h.when || h.d)}</span></div>
         <div class="d-row"><span class="d-k">Where</span><span class="d-v">${escapeHtml(h.where || "London")}</span></div>
-        <div class="d-row"><span class="d-k">Group</span><span class="d-v">${(h.members || []).length + 1} people (including you)</span></div>
+        <div class="d-row"><span class="d-k">Group</span><span class="d-v">${c.members.length + 1} people (including you)</span></div>
       </section>
       <section class="d-card">
         <h3>${h.upcoming ? "Who you'll meet" : "Who you met"}</h3>
@@ -489,7 +704,7 @@
     closeDrawer();
     detail.classList.add("open");
     detail.setAttribute("aria-hidden", "false");
-    detail.scrollTop = 0;
+    detailBody.scrollTop = 0;
   }
   function closeDetail(reopen = true) {
     if (!detail.classList.contains("open")) return;
@@ -509,32 +724,37 @@
     typingTimer = null;
     mic.classList.remove("listening");
   }
+  // Simulated speech: the scripted answer appears as a live caption (voice)
+  // or in the text box (typing), then is sent.
   function simulateVoice() {
     if (busy) return;
-    if (typingTimer) { stopTyping(); return; }
+    if (typingTimer) {
+      stopTyping();
+      caption.textContent = "";
+      if (inputMode === "voice") setMic("listening");
+      return;
+    }
     const text = currentSuggestion();
     if (!text) return;
-    mic.classList.add("listening");
-    input.value = "";
+    hush();
+    const voiceUI = inputMode === "voice";
+    const out = (t) => { if (voiceUI) caption.textContent = t; else { input.value = t; input.scrollLeft = input.scrollWidth; } };
+    if (voiceUI) setMic("talking"); else mic.classList.add("listening");
+    out("");
     let i = 0;
-    setTimeout(() => {
+    typingTimer = setTimeout(() => {
       typingTimer = setInterval(() => {
-        input.value = text.slice(0, ++i);
-        input.scrollLeft = input.scrollWidth;
+        out(text.slice(0, ++i));
         if (i >= text.length) {
           clearInterval(typingTimer);
           typingTimer = null;
-          setTimeout(() => { mic.classList.remove("listening"); send(input.value); }, 550);
+          setTimeout(() => { mic.classList.remove("listening"); send(text); }, 550);
         }
       }, 32);
-    }, 450);
+    }, 350);
   }
 
   // ---------- UI wiring ----------
-  function focusInput() {
-    if (window.matchMedia("(hover: hover)").matches) input.focus();
-  }
-
   function openDrawer() {
     drawer.classList.add("open");
     drawer.setAttribute("aria-hidden", "false");
@@ -550,31 +770,50 @@
     settingsMenu.hidden = true;
     settingsBtn.setAttribute("aria-expanded", "false");
   }
+  function setSpeakOn(on) {
+    speakOn = on;
+    voiceBtn.classList.toggle("off", !on);
+    voiceBtn.setAttribute("aria-pressed", String(on));
+    voiceBtn.setAttribute("aria-label", on ? "Mute belong's voice" : "Unmute belong's voice");
+    if (!on) hush();
+  }
 
   function reset() {
+    hush();
     stopTyping();
     step = 0; busy = false; userName = ""; phase = "chat"; traits = [];
-    currentProposal = "main"; usedAlt = false;
-    history = BASE_HISTORY.slice();
+    area = "east"; currentKind = "main"; usedAlt = false;
+    circles = baseCircles();
     renderHistory();
     messages.innerHTML = "";
     input.value = "";
     closeSettings(); closeDetail(false); closeDrawer();
+    setInputMode("voice");
     chat.hidden = true;
     splash.hidden = false;
     splash.classList.remove("leaving");
   }
 
   $("beginBtn").addEventListener("click", async () => {
+    // A silent utterance inside the tap unlocks speech on mobile browsers.
+    if (synth) synth.speak(new SpeechSynthesisUtterance(""));
     splash.classList.add("leaving");
     await sleep(420);
     splash.hidden = true;
     chat.hidden = false;
+    setInputMode("voice");
+    setMic("busy");
     start();
   });
 
+  bigMic.addEventListener("click", simulateVoice);
+  switchBtn.addEventListener("click", () => setInputMode(inputMode === "voice" ? "type" : "voice"));
   form.addEventListener("submit", (e) => { e.preventDefault(); send(input.value); });
   mic.addEventListener("click", simulateVoice);
+  voiceBtn.addEventListener("click", () => {
+    setSpeakOn(!speakOn);
+    if (dock.dataset.state === "busy") setMic("busy");
+  });
 
   $("menuBtn").addEventListener("click", openDrawer);
   $("closeDrawer").addEventListener("click", closeDrawer);

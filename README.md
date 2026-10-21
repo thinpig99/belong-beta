@@ -4,7 +4,8 @@ Pitch demo of **belong**, a social discovery agent. The AI manager chats with th
 
 ## Demo tips
 - Tap the splash screen to start.
-- Tap the **mic** button to auto-fill the next scripted reply (simulated voice input), or type anything and press Enter.
+- belong speaks each question, then the big mic turns on by itself. Tap it to play the next scripted answer as a live caption (simulated voice), or tap one of the answer buttons.
+- The button to the right of the mic switches to typing (and mutes belong) and back.
 - At the proposal, choose **Yes, count me in** or **Show me another**.
 - The menu (top left) shows History; the gear (top right) shows the account menu. **Log Out** resets the demo.
 

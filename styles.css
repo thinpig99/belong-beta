@@ -172,6 +172,32 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .bubble strong { font-weight: 600; }
 
+/* Multiple-choice answers */
+.choices {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: -4px 0 0 40px;
+}
+.choice {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  padding: 11px 14px;
+  background: #fff;
+  border: 1.5px solid var(--mint-line);
+  border-radius: 16px;
+  font-size: 14.5px; line-height: 1.35; color: var(--ink);
+  animation: rise .3s ease both;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.choice:hover:not(:disabled) { border-color: #43b083; background: #f6fcf9; }
+.choice:active:not(:disabled) { transform: scale(.98); }
+.choice .letter {
+  flex: none; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 600;
+  color: var(--green); background: var(--green-soft);
+}
+.choices.closed { display: none; }
+
 /* Typing indicator */
 .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
 .typing span {

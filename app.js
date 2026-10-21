@@ -2,43 +2,60 @@
   "use strict";
 
   // ---------- Demo script ----------
-  // Each step: what belong says, then the suggested user reply (used by the mic button).
-  const SCRIPT = [
+  // Each step: the question belong asks and the multiple-choice answers.
+  // ack = belong's reaction to that answer, trait = what it learns.
+  // voice/voiceAck/voiceTrait = the path used by the mic button or a typed answer.
+  const STEPS = [
     {
-      agent: [
-        "Hi. I'm belong, your social discovery agent. By getting to know your personality and preferences, I'll suggest the most compatible people and activities in London for you.\nI'm curious—if it were a soft rainy evening in London, would you find yourself more drawn to a bustling pub filled with overlapping conversations, or a quiet living room where only the sound of rain reaches the windows?"
-      ],
-      suggest: "hi belong, i am wyatt, nice to meet you. well, i would say.. prefer my quiet living room"
+      q: "Hi. I'm belong, your social discovery agent. By getting to know your personality and preferences, I'll suggest the most compatible people and activities in London for you.\nI'm curious—if it were a soft rainy evening in London, would you find yourself more drawn to a bustling pub filled with overlapping conversations, or a quiet living room where only the sound of rain reaches the windows?",
+      voice: "hi belong, i am wyatt, nice to meet you. well, i would say.. prefer my quiet living room",
+      options: [
+        { label: "A bustling pub full of overlapping conversations", ack: "Love that energy. You clearly draw life from the buzz of a room.", trait: "lively, open energy" },
+        { label: "A quiet living room with only the sound of rain", ack: "That's insightful. People with that preference often value meaningful connection over small talk.", trait: "quiet depth", def: true },
+        { label: "A cosy café with a book and a few familiar faces", ack: "A lovely middle ground—comfort first, with just enough company.", trait: "calm, familiar comfort" },
+        { label: "A small live music bar, somewhere in between", ack: "Nice. A little atmosphere, but still room to actually talk.", trait: "atmosphere with room to talk" }
+      ]
     },
     {
-      agent: [
-        "That's insightful. People with that preference often value meaningful connection over small talk. How do you usually like to spend your weekends in London—among familiar faces or discovering new corners alone?"
-      ],
-      suggest: "i would like to discover a new corners alone"
+      q: "How do you usually like to spend your weekends in London—among familiar faces or discovering new corners alone?",
+      voice: "i would like to discover a new corners alone",
+      options: [
+        { label: "Discovering new corners alone", ack: "I love that.", trait: "finding new corners on your own", def: true },
+        { label: "Among familiar faces", ack: "A steady circle is precious, especially in a city this big.", trait: "a close, steady circle" },
+        { label: "A bit of both, depending on the week", ack: "A good balance—you keep your roots but stay curious.", trait: "a balance of the familiar and the new" },
+        { label: "Trying new things with new people", ack: "Brilliant. You're open to the city's surprises.", trait: "fresh encounters" }
+      ]
     },
     {
-      agent: [
-        "I love that. One more: when you step into a new corner of the city, what catches your attention first—the **design of the space**, the **music** playing, or the **people** around you?"
-      ],
-      suggest: "the design and the music, definitely. i really love old vinyl records"
+      q: "One more: when you step into a new corner of the city, what catches your attention first?",
+      voice: "the design and the music, definitely. i really love old vinyl records",
+      voiceTrait: "thoughtfully designed spaces and analog sound",
+      options: [
+        { label: "The design of the space", trait: "thoughtfully designed spaces", def: true },
+        { label: "The music playing", trait: "music that sets the mood" },
+        { label: "The people around me", trait: "the stories people carry" },
+        { label: "The food and drink", trait: "small, well-made details" },
+        { label: "The light and the view", trait: "light, views and quiet corners" }
+      ]
     },
     {
-      agent: [
-        "{name}I'm starting to see you clearly. You're drawn to **quiet depth**, **thoughtfully designed spaces**, and **analog sound**—and you'd rather share a few real conversations than many loud ones.\nA small, intimate gathering around a shared passion would suit you far better than a crowded event. Shall I arrange an activity and a group for you?"
-      ],
-      suggest: "okay please arrange a activity and group."
+      q: (t, name) => `${name ? `Thank you, ${name}. ` : ""}I'm starting to see you clearly. You're drawn to **${t[0]}**, **${t[1]}**, and **${t[2]}**.\nA small gathering around a shared passion is the best way to turn that into real connection. Shall I arrange an activity and a group for you?`,
+      voice: "okay please arrange a activity and group.",
+      options: [
+        { label: "Yes, please arrange an activity and a group", ack: "Wonderful.", def: true },
+        { label: "How does it work?", ack: "I'll find a small group whose personalities fit yours, choose a place and time that suit everyone, and take care of the booking. All you need to do is say yes.\nShall I go ahead?", repeat: true }
+      ]
     },
     {
-      agent: [
-        "Wonderful. I'll design a meeting for you. Which **area** in London do you prefer, and what **time** usually works best for you?"
-      ],
-      suggest: "mayfair or kensington area would be better, and from saturday afternoon to night would be good"
-    },
-    {
-      agent: ["Perfect. One moment please. I'm finding exactly the right space and soul for you in London..."],
-      matching: true,
-      proposal: "main",
-      suggest: "yes, that sounds perfect!"
+      q: "I'll design a meeting for you. Which **area** in London do you prefer, and what **time** usually works best for you?",
+      voice: "mayfair or kensington area would be better, and from saturday afternoon to night would be good",
+      final: true,
+      options: [
+        { label: "Mayfair or Kensington · Saturday afternoon to night", def: true },
+        { label: "Shoreditch or Hackney · Friday evening" },
+        { label: "South Bank · Sunday afternoon" },
+        { label: "Anywhere central · Weekday evenings" }
+      ]
     }
   ];
 
@@ -89,6 +106,7 @@
   let phase = "chat"; // chat | proposal | done
   let currentProposal = "main";
   let usedAlt = false;
+  let traits = [];
   let history = BASE_HISTORY.slice();
   let typingTimer = null;
 
@@ -185,12 +203,46 @@
   }
 
   // ---------- Flow ----------
+  function questionText(i) {
+    const q = STEPS[i].q;
+    return typeof q === "function" ? q(traits, userName) : q;
+  }
+
+  // Render the multiple-choice answers under belong's question.
+  function showChoices(i, exclude = []) {
+    const opts = STEPS[i].options.filter((o) => !exclude.includes(o));
+    const row = document.createElement("div");
+    row.className = "choices";
+    const letters = "ABCDE";
+    opts.forEach((o, k) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "choice";
+      btn.innerHTML = `<span class="letter">${letters[k]}</span><span>${escapeHtml(o.label)}</span>`;
+      btn.addEventListener("click", () => {
+        if (busy) return;
+        btn.classList.add("picked");
+        answer(o.label, o);
+      });
+      btn.style.animationDelay = (k * 70) + "ms";
+      row.appendChild(btn);
+    });
+    messages.appendChild(row);
+    scrollDown();
+  }
+  function closeChoices() {
+    messages.querySelectorAll(".choices:not(.closed)").forEach((c) => {
+      c.classList.add("closed");
+      c.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    });
+  }
+
   async function start() {
     busy = true;
     await sleep(500);
-    await agentSay(SCRIPT[0].agent[0], { think: 900 });
+    await agentSay(questionText(0), { think: 900 });
+    showChoices(0);
     busy = false;
-    focusInput();
   }
 
   function captureName(text) {
@@ -200,9 +252,55 @@
     }
   }
 
-  async function send(text) {
-    text = text.trim();
+  // Typed text and mic input go here; choice buttons call answer() directly.
+  function send(text) {
+    text = (text || "").trim();
     if (!text || busy) return;
+    if (phase === "chat") {
+      const s = STEPS[step];
+      const def = s.options.find((o) => o.def) || s.options[0];
+      answer(text, { ack: def.ack, trait: s.voiceTrait || def.trait, typed: true });
+    } else {
+      answerAfterChat(text);
+    }
+  }
+
+  async function answer(text, opt) {
+    busy = true;
+    stopTyping();
+    closeChoices();
+    addRow("user", fmt(text));
+    input.value = "";
+
+    const s = STEPS[step];
+    if (opt.typed && step === 0) captureName(text);
+
+    if (opt.repeat) {
+      await agentSay(opt.ack);
+      showChoices(step, s.options.filter((o) => o.repeat));
+      busy = false;
+      return;
+    }
+
+    if (opt.trait) traits[step] = opt.trait;
+
+    if (s.final) {
+      await agentSay("Perfect. One moment please. I'm finding exactly the right space and soul for you in London...");
+      await sleep(400);
+      await runMatching();
+      await showProposal("main");
+      busy = false;
+      return;
+    }
+
+    step++;
+    const lead = opt.ack ? opt.ack + " " : "";
+    await agentSay(lead + questionText(step));
+    showChoices(step);
+    busy = false;
+  }
+
+  async function answerAfterChat(text) {
     busy = true;
     stopTyping();
     addRow("user", fmt(text));
@@ -218,31 +316,10 @@
       } else {
         await confirmPlan();
       }
-      busy = false;
-      focusInput();
-      return;
-    }
-
-    if (phase === "done") {
+    } else {
       await agentSay("I'll be here whenever you'd like to discover something new. Enjoy your weekend in London.", { think: 700 });
-      busy = false;
-      focusInput();
-      return;
-    }
-
-    if (step === 0) captureName(text);
-    step++;
-    const s = SCRIPT[step];
-    if (s) {
-      for (const line of s.agent) await agentSay(line);
-      if (s.matching) {
-        await sleep(400);
-        await runMatching();
-        await showProposal("main");
-      }
     }
     busy = false;
-    focusInput();
   }
 
   async function confirmPlan() {
@@ -278,9 +355,9 @@
 
   // ---------- Mic (simulated voice input for the demo) ----------
   function currentSuggestion() {
-    if (phase === "proposal") return SCRIPT[SCRIPT.length - 1].suggest;
+    if (phase === "proposal") return "yes, that sounds perfect!";
     if (phase === "done") return "thank you, belong!";
-    return SCRIPT[step] ? SCRIPT[step].suggest : "";
+    return STEPS[step] ? STEPS[step].voice : "";
   }
   function stopTyping() {
     clearInterval(typingTimer);
@@ -331,7 +408,7 @@
 
   function reset() {
     stopTyping();
-    step = 0; busy = false; userName = ""; phase = "chat";
+    step = 0; busy = false; userName = ""; phase = "chat"; traits = [];
     currentProposal = "main"; usedAlt = false;
     history = BASE_HISTORY.slice();
     renderHistory();

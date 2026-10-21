@@ -69,6 +69,13 @@
         ["Where", "'Spiritland', Royal Festival Hall (Reserved Alcove)"],
         ["Group", "6 people (including you)"]
       ],
+      members: [
+        ["Clara", "Interior designer \u00b7 restores old turntables"],
+        ["James", "Architect \u00b7 collects 70s jazz pressings"],
+        ["Noor", "UX researcher \u00b7 loves ambient music"],
+        ["Oliver", "Photographer \u00b7 shoots empty spaces"],
+        ["Yuna", "Product manager \u00b7 new to London"]
+      ],
       group: "You will be joined by five other individuals who share your appreciation for minimalism, architectural detail, and the quiet warmth of analog sound in a fast-paced city.",
       ask: "Does this feel like the right way to spend your London weekend?"
     },
@@ -81,15 +88,85 @@
         ["Where", "Design Museum, Kensington High Street"],
         ["Group", "5 people (including you)"]
       ],
+      members: [
+        ["Ella", "Furniture maker \u00b7 loves mid-century design"],
+        ["Marcus", "Architecture student \u00b7 sketches buildings"],
+        ["Rin", "Ceramicist \u00b7 notices every material"],
+        ["Hugo", "Lighting designer \u00b7 quiet observer"]
+      ],
       group: "You will be joined by four others who notice the details—light, materials, and the stories behind everyday objects—and who prefer a long conversation to a loud room.",
       ask: "Would you like this one instead?"
     }
   };
 
+  // Past gatherings shown in History. "reflection" is the user's own notes after
+  // the meeting, summarized by belong.
   const BASE_HISTORY = [
-    { t: "Late Night Jazz in Shoreditch", d: "2024. 05. 12" },
-    { t: "Hampstead Heath Morning Walk", d: "2024. 04. 28" },
-    { t: "Quiet Reading in Bloomsbury", d: "2024. 03. 15" }
+    {
+      t: "Late Night Jazz in Shoreditch", d: "2024. 05. 12",
+      when: "Sunday, 12 May 2024 · 9:00 PM",
+      where: "Nightjar, City Road, Shoreditch",
+      activity: "An intimate late-night set from a jazz trio, with time to talk between sets.",
+      members: [
+        ["Maya", "Architect · collects Blue Note records"],
+        ["Tom", "Sound engineer · plays double bass"],
+        ["Priya", "Product designer · new to London"],
+        ["Daniel", "Teacher · quiet, sharp sense of humour"]
+      ],
+      reflection: {
+        summary: "I went in a little tired and expected to stay for one set. I stayed for three. Talking about music between sets made it easy to skip the small talk, and it was the first time in a while I felt properly listened to.",
+        highlights: [
+          "Maya and I talked about how a space changes the way music sounds",
+          "Tom recommended a record shop in Dalston I want to visit",
+          "The bar was a bit loud in the first set; the corner table worked better"
+        ],
+        keep: ["Maya", "Tom"],
+        learned: "You open up most around shared, specific interests. Next time I'll pick quieter seating."
+      }
+    },
+    {
+      t: "Hampstead Heath Morning Walk", d: "2024. 04. 28",
+      when: "Sunday, 28 April 2024 · 8:00 AM",
+      where: "Parliament Hill entrance, Hampstead Heath",
+      activity: "A slow 90-minute walk across the Heath, ending with coffee at the Lido café.",
+      members: [
+        ["Hannah", "Nurse · early riser, loves birdwatching"],
+        ["Leo", "Data analyst · training for a half marathon"],
+        ["Sofia", "PhD student · moved from Lisbon last year"]
+      ],
+      reflection: {
+        summary: "Walking side by side made conversation feel natural. Nobody had to fill the silence. It was early, but the view from Parliament Hill made it worth it, and I left feeling calmer than I had all week.",
+        highlights: [
+          "Sofia and I swapped tips on settling into London",
+          "Hannah pointed out birds I'd never noticed",
+          "Would prefer a slightly later start next time"
+        ],
+        keep: ["Sofia"],
+        learned: "Outdoor, side-by-side activities suit you well. I'll avoid starts before 9 AM."
+      }
+    },
+    {
+      t: "Quiet Reading in Bloomsbury", d: "2024. 03. 15",
+      when: "Friday, 15 March 2024 · 2:00 PM",
+      where: "London Review Cake Shop, Bloomsbury",
+      activity: "An hour of silent reading together, then a short chat about what everyone was reading.",
+      members: [
+        ["Grace", "Editor · reads mostly poetry"],
+        ["Sam", "Software engineer · into science fiction"],
+        ["Aiko", "Illustrator · sketches while she reads"],
+        ["Ben", "Civil servant · history buff"]
+      ],
+      reflection: {
+        summary: "My first belong gathering. I was nervous, but the silent hour took the pressure off. By the time we started talking, it already felt like we had shared something.",
+        highlights: [
+          "Grace lent me a poetry collection I'm still reading",
+          "Liked that there was no pressure to talk at first",
+          "Could have used a little more time for the chat afterwards"
+        ],
+        keep: ["Grace", "Aiko"],
+        learned: "A quiet start helps you settle in. I'll keep that format for first meetings."
+      }
+    }
   ];
 
   // ---------- Elements ----------
@@ -98,6 +175,7 @@
   const form = $("composer"), input = $("input"), mic = $("micBtn");
   const settingsBtn = $("settingsBtn"), settingsMenu = $("settingsMenu");
   const drawer = $("drawer"), scrim = $("scrim"), historyEl = $("history");
+  const detail = $("detail"), detailBody = $("detailBody");
 
   // ---------- State ----------
   let step = 0;
@@ -329,28 +407,95 @@
       `Wonderful${userName ? ", " + userName : ""}. Your seat is reserved for **${when}**.\nI've introduced you to the group and saved the details to your History. I'll check in after the gathering to learn what felt right—so the next suggestion fits you even better.`,
       { think: 900 }
     );
-    addHistory(p.history);
+    addHistory(p);
     phase = "done";
   }
 
   // ---------- History ----------
   function renderHistory(newTitle) {
-    historyEl.innerHTML = history.map((h) => `
-      <li class="${h.t === newTitle ? "new" : ""}">
+    historyEl.innerHTML = history.map((h, i) => `
+      <li class="${h.t === newTitle ? "new" : ""}" data-i="${i}" tabindex="0" role="button">
         <span class="q">”</span>
         <div class="info">
           <div class="t">${escapeHtml(h.t)}</div>
-          <div class="meta"><span class="city">London</span><span class="date">${h.d}</span></div>
+          <div class="meta"><span class="city">London</span><span class="date">${h.upcoming ? "Upcoming" : h.d}</span></div>
         </div>
       </li>`).join("");
+    historyEl.querySelectorAll("li").forEach((li) => {
+      const open = () => openDetail(history[+li.dataset.i]);
+      li.addEventListener("click", open);
+      li.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+    });
   }
-  function addHistory(title) {
+  function addHistory(p) {
     const now = new Date();
     const sat = new Date(now);
     sat.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7 || 7));
     const d = `${sat.getFullYear()}. ${String(sat.getMonth() + 1).padStart(2, "0")}. ${String(sat.getDate()).padStart(2, "0")}`;
-    history.unshift({ t: title, d });
-    renderHistory(title);
+    const get = (k) => (p.items.find(([key]) => key === k) || [])[1];
+    const day = sat.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const time = (get("When") || "").split(",").pop().trim();
+    history.unshift({
+      t: p.history, d, upcoming: true,
+      when: `${day} · ${time}`,
+      where: get("Where"),
+      activity: get("Activity"),
+      members: p.members
+    });
+    renderHistory(p.history);
+  }
+
+  function initials(n) { return n.slice(0, 1).toUpperCase(); }
+
+  function openDetail(h) {
+    const members = (h.members || []).map(([n, tag]) => `
+      <li><span class="m-av">${initials(n)}</span><div><div class="m-name">${escapeHtml(n)}</div><div class="m-tag">${escapeHtml(tag)}</div></div></li>`).join("");
+    let reflection;
+    if (h.reflection) {
+      const r = h.reflection;
+      reflection = `
+        <section class="d-card reflect">
+          <h3>My reflection <span class="d-sub">summarized by belong</span></h3>
+          <p class="r-summary">${escapeHtml(r.summary)}</p>
+          <h4>What stood out</h4>
+          <ul class="r-list">${r.highlights.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
+          <h4>Staying in touch with</h4>
+          <div class="r-keep">${r.keep.map((n) => `<span class="keep-chip"><span class="m-av sm">${initials(n)}</span>${escapeHtml(n)}</span>`).join("")}</div>
+          <div class="r-learned"><span class="avatar sm">b</span><p><strong>What belong learned</strong><br>${escapeHtml(r.learned)}</p></div>
+        </section>`;
+    } else {
+      reflection = `
+        <section class="d-card reflect empty">
+          <h3>My reflection</h3>
+          <p class="r-summary">After the gathering, belong will check in with you and summarize your reflection here.</p>
+        </section>`;
+    }
+    detailBody.innerHTML = `
+      <div class="d-hero">
+        ${h.upcoming ? '<span class="badge">Upcoming</span>' : '<span class="badge past">Met</span>'}
+        <h2>${escapeHtml(h.t)}</h2>
+        <p>${escapeHtml(h.activity || "")}</p>
+      </div>
+      <section class="d-card">
+        <div class="d-row"><span class="d-k">When</span><span class="d-v">${escapeHtml(h.when || h.d)}</span></div>
+        <div class="d-row"><span class="d-k">Where</span><span class="d-v">${escapeHtml(h.where || "London")}</span></div>
+        <div class="d-row"><span class="d-k">Group</span><span class="d-v">${(h.members || []).length + 1} people (including you)</span></div>
+      </section>
+      <section class="d-card">
+        <h3>${h.upcoming ? "Who you'll meet" : "Who you met"}</h3>
+        <ul class="members">${members}</ul>
+      </section>
+      ${reflection}`.replace(/\n\s*/g, "");
+    closeDrawer();
+    detail.classList.add("open");
+    detail.setAttribute("aria-hidden", "false");
+    detail.scrollTop = 0;
+  }
+  function closeDetail(reopen = true) {
+    if (!detail.classList.contains("open")) return;
+    detail.classList.remove("open");
+    detail.setAttribute("aria-hidden", "true");
+    if (reopen) openDrawer();
   }
 
   // ---------- Mic (simulated voice input for the demo) ----------
@@ -414,7 +559,7 @@
     renderHistory();
     messages.innerHTML = "";
     input.value = "";
-    closeSettings(); closeDrawer();
+    closeSettings(); closeDetail(false); closeDrawer();
     chat.hidden = true;
     splash.hidden = false;
     splash.classList.remove("leaving");
@@ -433,6 +578,7 @@
 
   $("menuBtn").addEventListener("click", openDrawer);
   $("closeDrawer").addEventListener("click", closeDrawer);
+  $("detailBack").addEventListener("click", () => closeDetail(true));
   scrim.addEventListener("click", closeDrawer);
 
   settingsBtn.addEventListener("click", (e) => {
@@ -448,7 +594,10 @@
   $("logoutBtn").addEventListener("click", reset);
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { closeDrawer(); closeSettings(); }
+    if (e.key === "Escape") {
+      if (detail.classList.contains("open")) closeDetail(true);
+      else { closeDrawer(); closeSettings(); }
+    }
   });
 
   renderHistory();
